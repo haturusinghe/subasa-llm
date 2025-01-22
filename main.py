@@ -1,60 +1,218 @@
-# Standard library imports 
 import argparse
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, Dict, Any, Tuple
 import gc
 import json
 import os
-import random 
+import random
 from datetime import datetime
+import logging
 from math import ceil
-from unsloth import FastLanguageModel
-import torch
 
-# Third party imports
 import numpy as np
 import torch
-import torch.nn as nn
-import torch_optimizer as optim
 import wandb
-from sklearn.preprocessing import MultiLabelBinarizer
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+from datasets import Dataset
+from unsloth import FastLanguageModel
 from transformers import (
-    XLMRobertaForMaskedLM,
-    XLMRobertaForSequenceClassification,
-    XLMRobertaForTokenClassification,
-    XLMRobertaTokenizer,
-    DataCollatorForLanguageModeling,
+    TrainingArguments,
+    DataCollatorForSeq2Seq,
+    TextStreamer,
 )
+from trl import SFTTrainer
 
-# Local imports
 from src.dataset.dataset import SOLDAugmentedDataset, SOLDDataset
-from src.evaluate.evaluate import evaluate, evaluate_for_hatespeech
-from src.evaluate.lime import TestLime
-from src.models.custom_models import XLMRobertaCustomForTCwMRP
-from src.utils.helpers import (
-    GetLossAverage,
-    NumpyEncoder, 
-    add_tokens_to_tokenizer,
-    get_device,
-    save_checkpoint,
-    setup_directories
-)
+from src.utils.helpers import get_device, save_checkpoint, setup_directories
 from src.utils.logging_utils import setup_logging
-from src.utils.prefinetune_utils import add_pads, make_masked_rationale_label, prepare_gts
-import subprocess
-import os
+from unsloth.chat_templates import get_chat_template, train_on_responses_only
 
-def set_seed(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(seed)
-    random.seed(seed)
+@dataclass
+class ModelConfig:
+    """Configuration for model training and inference"""
+    max_seq_length: int = 2048
+    dtype: Optional[torch.dtype] = None
+    load_in_4bit: bool = True
+    lora_r: int = 16
+    lora_alpha: int = 16
+    lora_dropout: float = 0
+    target_modules: list = None
 
+    def __post_init__(self):
+        self.target_modules = [
+            "q_proj", "k_proj", "v_proj", "o_proj",
+            "gate_proj", "up_proj", "down_proj",
+        ]
+
+class OffensiveLanguageDetector:
+    def __init__(self, args: argparse.Namespace):
+        self.args = args
+        self._set_seed()
+        self.logger = setup_logging()
+        self.model_config = ModelConfig()
+        self.device = get_device()
+        self._setup_wandb()
+
+    def _setup_wandb(self) -> None:
+        """Initialize Weights & Biases tracking"""
+        config = {
+            "learning_rate": self.args.lr,
+            "epochs": self.args.epochs,
+            "batch_size": self.args.batch_size,
+            "model": self.args.pretrained_model,
+            "seed": self.args.seed,
+            "dataset": self.args.dataset,
+            "using_augmented_dataset": self.args.use_augmented_dataset
+        }
+        
+        wandb.init(
+            project=self.args.wandb_project,
+            config=config,
+            name=f"{self.args.exp_name}_{'TRAIN' if not self.args.test else 'TEST'}"
+        )
+        self.args.wandb_run_url = wandb.run.get_url()
+
+    def _set_seed(self) -> None:
+        """Set random seeds for reproducibility"""
+        torch.manual_seed(self.args.seed)
+        torch.cuda.manual_seed_all(self.args.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        np.random.seed(self.args.seed)
+        random.seed(self.args.seed)
+
+    def _load_model_and_tokenizer(self) -> Tuple[Any, Any]:
+        """Load and configure the model and tokenizer"""
+        try:
+            model, tokenizer = FastLanguageModel.from_pretrained(
+                model_name=self.args.pretrained_model,
+                max_seq_length=self.model_config.max_seq_length,
+                dtype=self.model_config.dtype,
+                load_in_4bit=self.model_config.load_in_4bit,
+            )
+
+            model = FastLanguageModel.get_peft_model(
+                model,
+                r=self.model_config.lora_r,
+                target_modules=self.model_config.target_modules,
+                lora_alpha=self.model_config.lora_alpha,
+                lora_dropout=self.model_config.lora_dropout,
+                bias="none",
+                use_gradient_checkpointing="unsloth",
+                random_state=self.args.seed,
+                use_rslora=False,
+                loftq_config=None,
+            )
+
+            tokenizer = get_chat_template(tokenizer, chat_template="llama-3.1")
+            
+            return model, tokenizer
+        except Exception as e:
+            self.logger.error(f"Error loading model: {str(e)}")
+            raise
+
+    def _prepare_dataset(self, tokenizer) -> Dataset:
+        """Prepare and process the dataset"""
+        try:
+            dataset_cls = SOLDAugmentedDataset if self.args.use_augmented_dataset else SOLDDataset
+            train_dataset = dataset_cls(self.args, 'train')
+            train_dataloader = DataLoader(train_dataset, 
+                                        batch_size=self.args.batch_size, 
+                                        shuffle=True)
+
+            list_ds = [batch for batch in train_dataloader]
+            dataset = Dataset.from_dict(list_ds)
+
+            def formatting_prompts_func(examples):
+                convos = examples["messages"]
+                texts = [tokenizer.apply_chat_template(convo, 
+                                                     tokenize=False, 
+                                                     add_generation_prompt=False) 
+                        for convo in convos]
+                return {"text": texts}
+
+            return dataset.map(formatting_prompts_func, batched=True)
+        except Exception as e:
+            self.logger.error(f"Error preparing dataset: {str(e)}")
+            raise
+
+    def train(self) -> None:
+        """Train the model"""
+        try:
+            model, tokenizer = self._load_model_and_tokenizer()
+            dataset = self._prepare_dataset(tokenizer)
+
+            training_args = TrainingArguments(
+                per_device_train_batch_size=2,
+                gradient_accumulation_steps=4,
+                warmup_steps=5,
+                max_steps=3000,
+                learning_rate=2e-4,
+                fp16=not is_bfloat16_supported(),
+                bf16=is_bfloat16_supported(),
+                logging_steps=1,
+                optim="adamw_8bit",
+                weight_decay=0.01,
+                lr_scheduler_type="linear",
+                output_dir=self.args.dir_result,
+                report_to='wandb'
+            )
+
+            trainer = SFTTrainer(
+                model=model,
+                tokenizer=tokenizer,
+                train_dataset=dataset,
+                dataset_text_field="text",
+                max_seq_length=self.model_config.max_seq_length,
+                data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
+                dataset_num_proc=2,
+                packing=False,
+                args=training_args,
+            )
+
+            trainer = train_on_responses_only(
+                trainer,
+                instruction_part="<|start_header_id|>user<|end_header_id|>\n\n",
+                response_part="<|start_header_id|>assistant<|end_header_id|>\n\n",
+            )
+
+            trainer_stats = trainer.train()
+            self._log_training_stats(trainer_stats)
+            
+            save_path, huggingface_repo_url = save_checkpoint(model)
+            self._update_wandb_config({"checkpoint": save_path, 
+                                     "huggingface_repo_url": huggingface_repo_url})
+
+        except Exception as e:
+            self.logger.error(f"Training failed: {str(e)}")
+            raise
+        finally:
+            wandb.finish()
+
+    def _log_training_stats(self, trainer_stats: Dict[str, Any]) -> None:
+        """Log training statistics"""
+        gpu_stats = torch.cuda.get_device_properties(0)
+        used_memory = round(torch.cuda.max_memory_reserved() / 1024 / 1024 / 1024, 3)
+        max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024, 3)
+        
+        stats = {
+            "training_time_seconds": trainer_stats.metrics['train_runtime'],
+            "training_time_minutes": round(trainer_stats.metrics['train_runtime']/60, 2),
+            "peak_memory_gb": used_memory,
+            "peak_memory_percentage": round(used_memory/max_memory*100, 3)
+        }
+        
+        for key, value in stats.items():
+            self.logger.info(f"{key}: {value}")
+            wandb.log({key: value})
+
+    def _update_wandb_config(self, config_updates: Dict[str, Any]) -> None:
+        """Update W&B configuration"""
+        wandb.config.update(config_updates, allow_val_change=True)
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Subasa - Adapting Language Models for Low Resourced Offensive Language Detection in Sinhala')
+    parser = argparse.ArgumentParser(description='Offensive Language Detector')
 
     #SEED 
     parser.add_argument('--seed', type=int, default=42, help='random seed')
@@ -107,263 +265,21 @@ def parse_args():
 
     return parser.parse_args()
 
-
-
-
-def train_offensive_detection(args):
-    # Setup logging
-    logger = setup_logging()
-    logger.info("[START] [LLM] [FINAL] [OFFENSIVE_LANG_DET] Starting with args: {}".format(args))
-
-    # Initialize wandb
-    wandb.init(
-        project=args.wandb_project,
-        config={
-            "learning_rate": args.lr,
-            "epochs": args.epochs,
-            "batch_size": args.batch_size,
-            "model": args.pretrained_model,
-            "seed": args.seed,
-            "dataset": args.dataset,
-            "val_int": args.val_int,
-            "patience": args.patience,
-            "label_classes": args.num_labels,
-            "skip_empty_rat": args.skip_empty_rat,
-            "test": args.test,
-            "explain_sold": args.explain_sold,
-        },
-        name=args.exp_name + '_TRAIN'
-    )
-
-    args.wandb_run_url = wandb.run.get_url()
-
-    # Set seed
-    set_seed(args.seed)
-
-    max_seq_length = 2048 # Choose any! We auto support RoPE Scaling internally!
-    dtype = None # None for auto detection. Float16 for Tesla T4, V100, Bfloat16 for Ampere+
-    load_in_4bit = True # Use 4bit quantization to reduce memory usage. Can be False.
-
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name =  args.pretrained_model, #"unsloth/Llama-3.2-3B-Instruct",
-        #model_name = "unsloth/Llama-3.2-1B-Instruct",
-        max_seq_length = max_seq_length,
-        dtype = dtype,
-        load_in_4bit = load_in_4bit,
-        # token = "hf_...", # use one if using gated models like meta-llama/Llama-2-7b-hf
-    )
-
-    model = FastLanguageModel.get_peft_model(
-            model,
-            r = 16, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-            target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                            "gate_proj", "up_proj", "down_proj",],
-            lora_alpha = 16,
-            lora_dropout = 0, # Supports any, but = 0 is optimized
-            bias = "none",    # Supports any, but = "none" is optimized
-            # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
-            use_gradient_checkpointing = "unsloth", # True or "unsloth" for very long context
-            random_state = 3407,
-            use_rslora = False,  # We support rank stabilized LoRA
-            loftq_config = None, # And LoftQ
-        )
-
-    # Define dataloader
-    if args.use_augmented_dataset == False:
-        train_dataset = SOLDDataset(args, 'train') 
-        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    else:
-        train_dataset = SOLDAugmentedDataset(args, 'train')
-        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    
-    from datasets import Dataset
-    list_ds = []
-
-    # create a HF Dataset using train_dataloader
-    for i, batch in enumerate(train_dataloader):
-        list_ds.append(batch)
-    
-    dataset = Dataset.from_dict(list_ds)
-
-    from unsloth.chat_templates import get_chat_template
-
-    tokenizer = get_chat_template(
-        tokenizer,
-        chat_template = "llama-3.1",
-    )
-
-    def formatting_prompts_func(examples):
-        convos = examples["messages"]
-        texts = [tokenizer.apply_chat_template(convo, tokenize = False, add_generation_prompt = False) for convo in convos]
-        return { "text" : texts, }
-
-    dataset = dataset.map(formatting_prompts_func, batched = True,)
-
-
-
-
-    log = open(os.path.join(args.dir_result, 'train_res.txt'), 'a')
-
-    steps_per_epoch = ceil(len(train_dataset) / args.batch_size)
-    print("Steps per epoch: ", steps_per_epoch)
-
-    from trl import SFTTrainer
-    from transformers import TrainingArguments, DataCollatorForSeq2Seq
-    from unsloth import is_bfloat16_supported
-
-    trainer = SFTTrainer(
-        model = model,
-        tokenizer = tokenizer,
-        train_dataset = dataset,
-        dataset_text_field = "text",
-        max_seq_length = max_seq_length,
-        data_collator = DataCollatorForSeq2Seq(tokenizer = tokenizer),
-        dataset_num_proc = 2,
-        packing = False, # Can make training 5x faster for short sequences.
-        args = TrainingArguments(
-            per_device_train_batch_size = 2,
-            gradient_accumulation_steps = 4,
-            warmup_steps = 5,
-            num_train_epochs = 1, # Set this for 1 full training run.
-            max_steps = 3000,
-            learning_rate = 2e-4,
-            fp16 = not is_bfloat16_supported(),
-            bf16 = is_bfloat16_supported(),
-            logging_steps = 1,
-            optim = "adamw_8bit",
-            weight_decay = 0.01,
-            lr_scheduler_type = "linear",
-            seed = 42,
-            output_dir = "outputs",
-            report_to = 'wandb'
-        ),
-    )
-
-    #@title Show current memory stats
-    gpu_stats = torch.cuda.get_device_properties(0)
-    start_gpu_memory = round(torch.cuda.max_memory_reserved() / 1024 / 1024 / 1024, 3)
-    max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024, 3)
-    print(f"GPU = {gpu_stats.name}. Max memory = {max_memory} GB.")
-    print(f"{start_gpu_memory} GB of memory reserved.")
-
-    wandb.config.update({
-        "using_augmented_dataset": args.use_augmented_dataset,
-        "train_dataset_size": len(train_dataset),
-        "steps_per_epoch": steps_per_epoch,
-        "max_seq_length": max_seq_length,
-        "dtype": dtype,
-        "load_in_4bit": load_in_4bit,
-        "lr": args.lr,
-        "batch_size": args.batch_size,
-        "epochs": args.epochs,
-        "patience": args.patience,
-        "val_int": args.val_int,
-        
-        "gpu_start_memory": start_gpu_memory,
-    })
-
-    from unsloth.chat_templates import train_on_responses_only
-    trainer = train_on_responses_only(
-        trainer,
-        instruction_part = "<|start_header_id|>user<|end_header_id|>\n\n",
-        response_part = "<|start_header_id|>assistant<|end_header_id|>\n\n",
-    )
-
-    trainer_stats = trainer.train()
-
-    used_memory = round(torch.cuda.max_memory_reserved() / 1024 / 1024 / 1024, 3)
-    used_memory_for_lora = round(used_memory - start_gpu_memory, 3)
-    used_percentage = round(used_memory         /max_memory*100, 3)
-    lora_percentage = round(used_memory_for_lora/max_memory*100, 3)
-    print(f"{trainer_stats.metrics['train_runtime']} seconds used for training.")
-    print(f"{round(trainer_stats.metrics['train_runtime']/60, 2)} minutes used for training.")
-    print(f"Peak reserved memory = {used_memory} GB.")
-    print(f"Peak reserved memory for training = {used_memory_for_lora} GB.")
-    print(f"Peak reserved memory % of max memory = {used_percentage} %.")
-    print(f"Peak reserved memory for training % of max memory = {lora_percentage} %.")
-
-
-
-    save_path, huggingface_repo_url = save_checkpoint(model)
-
-    #update wandb config with the huggingface repo url and save path of checkpoint
-    wandb.config.update({
-        "checkpoint": save_path,
-        "huggingface_repo_url": huggingface_repo_url,
-    }, allow_val_change=True)
-
-    log.close()
-    wandb.finish()
-
-
-def test_for_hate_speech(args):
-    set_seed(args.seed)
-
-    wandb.init(
-        project=args.wandb_project,
-        config={
-            "batch_size": args.batch_size,
-            "model": args.pretrained_model,
-            "test_model_path": args.test_model_path,
-            "seed": args.seed,
-            "dataset": args.dataset,
-            "val_int": args.val_int,
-            "patience": args.patience,
-            "top_k": args.top_k,
-            "lime_n_sample": args.lime_n_sample,
-            "label_classes": args.num_labels,
-            "test": args.test,
-            "exp_name": args.exp_name,
-            "explain_sold": args.explain_sold,
-        },
-        name=args.exp_name + '_TEST'
-    )
-
-        FastLanguageModel.for_inference(model) # Enable native 2x faster inference
-    messages = [
-        {'content': 'You are a data extraction tool. Return answers in JSON format only.',
-    'role': 'system'},
-    {'content': "Identify the project names, company names, and people names in the "+\
-    "'following highlight: 'Together with our partners from Nike, Justin Chanell completed"+\
-    "' the milestone for GenXneG, which accelerated Nvidia's revenue by 5% and Tesla's revenue "+\
-    "'by 3%, the media went nuts over these accomplishments'",
-    'role': 'user'}
-    ]
-    input_ids = tokenizer.apply_chat_template(
-        messages,
-        add_generation_prompt = True,
-        return_tensors = "pt",
-    ).to("cuda")
-
-    from transformers import TextStreamer
-    text_streamer = TextStreamer(tokenizer, skip_prompt = True)
-    _ = model.generate(input_ids, streamer = text_streamer, max_new_tokens = 128, pad_token_id = tokenizer.eos_token_id)
-
-
-if __name__ == '__main__':
+def main():
     args = parse_args()
+    
+    # Setup paths and experiment name
     args.device = get_device()
-    args.waiting = 0
-    args.n_eval = 0
-
+    args.exp_name, args.dir_result = setup_directories(args)
+    
     # Clean up memory
     gc.collect()
     torch.cuda.empty_cache()
+    
+    detector = OffensiveLanguageDetector(args)
+    detector.train()
 
-    # Setup experiment name and paths
-    lm = '-'.join(args.pretrained_model.split('-')[:])
-    now = datetime.now()
-    args.exp_date = (now.strftime('%d%m%Y-%H%M') + '_LK')
-
-    # Setup experiment name and directories
-    args.exp_name, args.dir_result = setup_directories(args)
-    print("Checkpoint path: ", args.dir_result)
-
-    if args.test and args.test_model_path:
-        args.explain_sold = False  # Turn it to True for explainable metrics | WIP
-        args.batch_size = 1
-        test_for_hate_speech(args)
-    elif not args.test:
-        train_offensive_detection(args)
+if __name__ == "__main__":
+    main()
 
 
