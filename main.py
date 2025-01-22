@@ -231,9 +231,9 @@ def parse_args():
 
     # TRAIN
     parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--epochs', type=int, default=5)
-    parser.add_argument('--lr', type=float, default=0.00005)
-    parser.add_argument('--val_int', type=int, default=945)  
+    parser.add_argument('--epochs', type=int, default=1)
+    parser.add_argument('--lr', type=float, default=0.00002)
+    parser.add_argument('--val_int', type=int, default=10000)  
     parser.add_argument('--patience', type=int, default=3)
     
     parser.add_argument('--skip_empty_rat', default=False, help='skip empty rationales', type=bool, required=False)
@@ -267,6 +267,7 @@ def parse_args():
 
 def main():
     args = parse_args()
+    args.exp_date = datetime.now().strftime("%m%d-%H%M")
     
     # Setup paths and experiment name
     args.device = get_device()

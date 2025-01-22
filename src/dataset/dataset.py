@@ -14,19 +14,18 @@ import emoji
 import sys
 import argparse
 
-from src.utils.helpers import add_tokens_to_tokenizer, get_token_rationale
+from src.utils.helpers import add_tokens_to_tokenizer
 from src.utils.logging_utils import setup_logging
 
 from torch.utils.data import Dataset
 class SOLDDataset(Dataset):
-    def __init__(self, args, mode='train', tokenizer=None):
+    def __init__(self, args, mode='train'):
         self.train_dataset_path = 'SOLD_DATASET/sold_train_split.json' 
         self.test_dataset_path = 'SOLD_DATASET/sold_test_split.json'
 
         self.label_list = ['NOT' , 'OFF']
         self.label_count = [0, 0]
         self.logger = setup_logging()
-        self.tokenizer = tokenizer
 
         if mode == 'test':
             with open(self.test_dataset_path, 'r') as f:
@@ -58,10 +57,7 @@ class SOLDDataset(Dataset):
         #     self.dataset = self.dataset[:100]
 
         self.mode = mode
-        self.intermediate = args.intermediate
 
-        tokenizer = XLMRobertaTokenizer.from_pretrained(args.pretrained_model)
-        self.tokenizer = add_tokens_to_tokenizer(args, tokenizer)
     
     def __len__(self):
         return len(self.dataset)
@@ -118,8 +114,8 @@ class SOLDAugmentedDataset(SOLDDataset):
     ]
 
 
-    def __init__(self, args, mode='train', tokenizer=None):
-        super().__init__(args, mode, tokenizer)
+    def __init__(self, args, mode='train'):
+        super().__init__(args, mode)
         self.output_dir = Path("json_dump")
         self.output_dir.mkdir(exist_ok=True)
         self.initialize_data_structures()
