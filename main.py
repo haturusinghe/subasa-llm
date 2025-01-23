@@ -119,11 +119,39 @@ class OffensiveLanguageDetector:
             dataset_cls = SOLDAugmentedDataset if self.args.use_augmented_dataset else SOLDDataset
             train_dataset = dataset_cls(self.args, 'train')
             train_dataloader = DataLoader(train_dataset, 
-                                        batch_size=self.args.batch_size, 
+                                        batch_size=1, 
                                         shuffle=True)
+            
+            messages_list = []
+            for batch in train_dataloader:
+                text, label, rationale, tokens = batch[0][0], batch[1][0], batch[2], batch[3][0].split()
+                
+                # Process offensive phrases outside the f-string
+                offensive_phrases = ''
+                if label == 'OFF' and rationale:
+                    phrases = [tokens[i] for i, r in enumerate(rationale) if r == 1]
+                    offensive_phrases = f'Offensive Phrases: {" ".join(phrases)}' if phrases else ''
+                    print()
+                
+                messages_list.append({
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide a phrases in the tweet that you find offensive."
+                        },
+                        {
+                            "role": "user", 
+                            "content": f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
+                        },
+                        {
+                            "role": "assistant",
+                            "content": f"{label}\n{offensive_phrases}"
+                        }
+                    ]
+                })
 
-            list_ds = [batch for batch in train_dataloader]
-            dataset = Dataset.from_dict(list_ds)
+
+            dataset = Dataset.from_list(messages_list)
 
             def formatting_prompts_func(examples):
                 convos = examples["messages"]
