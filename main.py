@@ -297,13 +297,31 @@ class OffensiveLanguageDetector:
             else:
                 wandb.finish()
 
-    def test(self, model, tokenizer) -> None:
+    def evaluate(self) -> None:
+        """Evaluate a pre-trained model from HuggingFace"""
+        try:
+            if not self.args.hf_model_path:
+                raise ValueError("HuggingFace model path must be provided for evaluation")
+
+            self.logger.info(f"Loading model from {self.args.hf_model_path}")
+            model, tokenizer = self._load_model_and_tokenizer()
+            
+            self.logger.info("Starting evaluation")
+            self.test(model, tokenizer)
+
+        except Exception as e:
+            self.logger.error(f"Evaluation failed: {str(e)}")
+            raise
+
+    def test(self, model=None, tokenizer=None) -> None:
         """Test the model"""
         try:
-            # dataset = self._prepare_dataset_test(tokenizer)
+            if model is None or tokenizer is None:
+                if not self.args.hf_model_path:
+                    raise ValueError("Either provide model and tokenizer or specify hf_model_path")
+                model, tokenizer = self._load_model_and_tokenizer()
+
             dataset = self._prepare_dataset(tokenizer, mode='test')
-            if model == None and self.args.hf_model_path:
-                model = FastLanguageModel.from_pretrained(self.args.hf_model_path)
             
             start_time = datetime.now()
             FastLanguageModel.for_inference(model)
@@ -492,7 +510,10 @@ def main():
     torch.cuda.empty_cache()
     
     detector = OffensiveLanguageDetector(args)
-    detector.train()
+    if args.test and args.hf_model_path:
+        detector.evaluate()
+    else:
+        detector.train()
 
 if __name__ == "__main__":
     main()
