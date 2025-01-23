@@ -114,73 +114,100 @@ class OffensiveLanguageDetector:
             self.logger.error(f"Error loading model: {str(e)}")
             raise
 
-    def _prepare_dataset(self, tokenizer) -> Dataset:
-        """Prepare and process the dataset"""
+    def _process_offensive_phrases(self, label: str, rationale: list, tokens: list) -> Tuple[str, str]:
+        """Process and extract offensive phrases from text"""
+        offensive_phrases = ''
+        phrases_only = ''
+        if label == 'OFF' and rationale:
+            phrases = []
+            current_phrase = []
+            
+            for r, token in zip(rationale, tokens):
+                if r == 1:
+                    current_phrase.append(token)
+                elif current_phrase:
+                    phrases.append(" ".join(current_phrase))
+                    current_phrase = []
+            
+            if current_phrase:
+                phrases.append(" ".join(current_phrase))
+            
+            offensive_phrases = f'Offensive Phrases: {", ".join(phrases)}' if phrases else ''
+            phrases_only = ', '.join(phrases) if phrases else ''
+        
+        return offensive_phrases, phrases_only
+
+    def _create_message(self, text: str, label: str = None, offensive_phrases: str = '', is_testing: bool = False) -> dict:
+        """Create a message dictionary for the model"""
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide a phrases in the tweet that you find offensive."
+            },
+            {
+                "role": "user", 
+                "content": f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
+            }
+        ]
+        
+        if not is_testing:
+            messages.append({
+                "role": "assistant",
+                "content": f"{label}\n{offensive_phrases}"
+            })
+        
+        return {"messages": messages}
+
+    def _prepare_dataset(self, tokenizer, mode: str = 'train') -> Dataset:
+        """Prepare and process the dataset for training or testing"""
         try:
             dataset_cls = SOLDAugmentedDataset if self.args.use_augmented_dataset else SOLDDataset
-            train_dataset = dataset_cls(self.args, 'train')
-            train_dataloader = DataLoader(train_dataset, 
-                                        batch_size=1, 
-                                        shuffle=True)
+            dataset = dataset_cls(self.args, mode)
+            dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
             
             messages_list = []
-            for batch in train_dataloader:
-                text, label, rationale, tokens = batch[0][0], batch[1][0], batch[2], batch[3][0].split()
+            for batch in dataloader:
+                text, label = batch[0][0], batch[1][0]
+                rationale, tokens = batch[2], batch[3][0].split()
                 
-                # Process offensive phrases outside the f-string
-                offensive_phrases = ''
-                if label == 'OFF' and rationale:
-                    # Initialize variables for phrase grouping
-                    phrases = []
-                    current_phrase = []
-                    
-                    # Iterate through rationale and tokens together
-                    for i, (r, token) in enumerate(zip(rationale, tokens)):
-                        if r == 1:
-                            current_phrase.append(token)
-                        elif current_phrase:  # r == 0 and we have accumulated tokens
-                            phrases.append(" ".join(current_phrase))
-                            current_phrase = []
-                    
-                    # Don't forget to add the last phrase if it exists
-                    if current_phrase:
-                        phrases.append(" ".join(current_phrase))
-                    
-                    offensive_phrases = f'Offensive Phrases: {", ".join(phrases)}' if phrases else ''
-                    print()
+                offensive_phrases, phrases_only = self._process_offensive_phrases(label, rationale, tokens)
+                if mode == 'train':
+                    message_data = self._create_message(text, label, offensive_phrases)
+                elif mode == 'test':
+                    message_data = self._create_message(text, label, offensive_phrases, is_testing=True)
                 
-                messages_list.append({
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide a phrases in the tweet that you find offensive."
-                        },
-                        {
-                            "role": "user", 
-                            "content": f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
-                        },
-                        {
-                            "role": "assistant",
-                            "content": f"{label}\n{offensive_phrases}"
-                        }
-                    ]
-                })
+                if mode == 'test':
+                    message_data.update({
+                        "actual_tweet": text,
+                        "label": label,
+                        "rationale": rationale,
+                        "offensive_phrases": phrases_only,
+                        "tokens": tokens
+                    })
+                
+                messages_list.append(message_data)
 
-
-            dataset = Dataset.from_list(messages_list)
-
-            def formatting_prompts_func(examples):
-                convos = examples["messages"]
-                texts = [tokenizer.apply_chat_template(convo, 
-                                                     tokenize=False, 
-                                                     add_generation_prompt=False) 
-                        for convo in convos]
-                return {"text": texts}
-
-            return dataset.map(formatting_prompts_func, batched=True)
+            return self._format_dataset(messages_list, tokenizer)
         except Exception as e:
             self.logger.error(f"Error preparing dataset: {str(e)}")
             raise
+
+    def _format_dataset(self, messages_list: list, tokenizer) -> Dataset:
+        """Format the dataset for the model"""
+        dataset = Dataset.from_list(messages_list)
+        
+        def formatting_prompts_func(examples):
+            return {
+                "text": [
+                    tokenizer.apply_chat_template(
+                        convo, 
+                        tokenize=False, 
+                        add_generation_prompt=False
+                    ) for convo in examples["messages"]
+                ]
+            }
+        
+        return dataset.map(formatting_prompts_func, batched=True)
 
     def train(self) -> None:
         """Train the model"""
@@ -256,83 +283,11 @@ class OffensiveLanguageDetector:
             else:
                 wandb.finish()
 
-    def _prepare_dataset_test(self, tokenizer) -> Dataset:
-            """Prepare and process the dataset"""
-            try:
-                dataset_cls = SOLDAugmentedDataset if self.args.use_augmented_dataset else SOLDDataset
-                train_dataset = dataset_cls(self.args, 'test')
-                train_dataloader = DataLoader(train_dataset, 
-                                            batch_size=1, 
-                                            shuffle=True)
-                
-                messages_list = []
-                for batch in train_dataloader:
-                    text, label, rationale, tokens = batch[0][0], batch[1][0], batch[2], batch[3][0].split()
-                
-                    # Process offensive phrases outside the f-string
-                    offensive_phrases = ''
-                    phrases_only = ''
-                    if label == 'OFF' and rationale:
-                        # Initialize variables for phrase grouping
-                        phrases = []
-                        current_phrase = []
-                        
-                        # Iterate through rationale and tokens together
-                        for i, (r, token) in enumerate(zip(rationale, tokens)):
-                            if r == 1:
-                                current_phrase.append(token)
-                            elif current_phrase:  # r == 0 and we have accumulated tokens
-                                phrases.append(" ".join(current_phrase))
-                                current_phrase = []
-                        
-                        # Don't forget to add the last phrase if it exists
-                        if current_phrase:
-                            phrases.append(" ".join(current_phrase))
-                        
-                        offensive_phrases = f'Offensive Phrases: {", ".join(phrases)}' if phrases else ''
-                        phrases_only = f"{', '.join(phrases)}" if phrases else ''
-            
-                    
-                    messages_list.append({
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide a phrases in the tweet that you find offensive."
-                            },
-                            {
-                                "role": "user", 
-                                "content": f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
-                            }
-                    
-                        ],
-                        "actual_tweet": text,
-                        "label": batch[1][0],
-                        "rationale": batch[2],
-                        "offensive_phrases": phrases_only,
-                        "tokens": batch[3][0].split()
-                    })
-
-
-                dataset = Dataset.from_list(messages_list)
-
-                def formatting_prompts_func(examples):
-                    convos = examples["messages"]
-                    texts = [tokenizer.apply_chat_template(convo, 
-                                                        tokenize=False, 
-                                                        add_generation_prompt=False) 
-                            for convo in convos]
-                    return {"text": texts}
-
-                return dataset.map(formatting_prompts_func, batched=True)
-            except Exception as e:
-                self.logger.error(f"Error preparing dataset: {str(e)}")
-                raise
-
-
     def test(self, model, tokenizer) -> None:
         """Test the model"""
         try:
-            dataset = self._prepare_dataset_test(tokenizer)
+            # dataset = self._prepare_dataset_test(tokenizer)
+            dataset = self._prepare_dataset(tokenizer, mode='test')
             if model == None and self.args.test_model_path:
                 model = FastLanguageModel.from_pretrained(self.args.test_model_path)
             
