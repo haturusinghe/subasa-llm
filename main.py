@@ -29,6 +29,7 @@ from src.utils.helpers import get_device, save_checkpoint, setup_directories
 from src.utils.logging_utils import setup_logging
 from unsloth.chat_templates import get_chat_template, train_on_responses_only
 from unsloth import is_bfloat16_supported
+from src.utils.env import load_env_variables
 
 @dataclass
 class ModelConfig:
@@ -58,6 +59,7 @@ class OffensiveLanguageDetector:
 
     def _setup_wandb(self) -> None:
         """Initialize Weights & Biases tracking"""
+
         config = {
             "learning_rate": self.args.lr,
             "epochs": self.args.epochs,
@@ -73,6 +75,7 @@ class OffensiveLanguageDetector:
             config=config,
             name=f"{self.args.exp_name}_{'TRAIN' if not self.args.test else 'TEST'}"
         )
+        
         self.args.wandb_run_url = wandb.run.get_url()
 
     def _set_seed(self) -> None:
@@ -464,6 +467,9 @@ def parse_args():
     return parser.parse_args()
 
 def main():
+    # Load environment variables
+    load_env_variables()
+    
     args = parse_args()
     args.exp_date = datetime.now().strftime("%m%d-%H%M")
     
