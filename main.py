@@ -196,8 +196,9 @@ class OffensiveLanguageDetector:
             training_args = TrainingArguments(
                 per_device_train_batch_size=2,
                 gradient_accumulation_steps=4,
-                warmup_steps=5,
-                max_steps=3000,
+                warmup_steps=5, 
+                # num_train_epochs = 1, # Set this for 1 full training run.
+                max_steps=10, # remove for full training run
                 learning_rate=2e-4,
                 fp16=not is_bfloat16_supported(),
                 bf16=is_bfloat16_supported(),
@@ -351,7 +352,7 @@ class OffensiveLanguageDetector:
 def parse_args():
     parser = argparse.ArgumentParser(description='Offensive Language Detector')
 
-    #SEED 
+    # SEED 
     parser.add_argument('--seed', type=int, default=42, help='random seed')
 
     # DATASET
@@ -363,42 +364,29 @@ def parse_args():
     parser.add_argument('--test_model_path', type=str, required=False, help='the checkpoint path to test', default=None)
 
     # PRETRAINED MODEL
-    model_choices = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct-bnb-4bit', 'unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit', 'unsloth/Mistral-Small-Instruct-2409' ]
-    parser.add_argument('--pretrained_model', default='unsloth/Llama-3.2-3B-Instruct', choices=model_choices, help='a pre-trained LLM')  
+    model_choices = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct-bnb-4bit', 
+                    'unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit', 'unsloth/Mistral-Small-Instruct-2409']
+    parser.add_argument('--pretrained_model', default='unsloth/Llama-3.2-3B-Instruct', 
+                       choices=model_choices, help='a pre-trained LLM')  
 
-    # TRAIN
-    parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--epochs', type=int, default=1)
-    parser.add_argument('--lr', type=float, default=0.00002)
-    parser.add_argument('--val_int', type=int, default=10000)  
-    parser.add_argument('--patience', type=int, default=3)
+    # TRAINING PARAMETERS
+    parser.add_argument('--batch_size', type=int, default=16, help='training batch size')
+    parser.add_argument('--epochs', type=int, default=1, help='number of training epochs')
+    parser.add_argument('--lr', type=float, default=0.00002, help='learning rate')
     
-    parser.add_argument('--skip_empty_rat', default=False, help='skip empty rationales', type=bool, required=False)
-
-    # Weights & Biases config
-    parser.add_argument('--wandb_project', type=str, default='subasa-llm', help='Weights & Biases project name')
-    parser.add_argument('--push_to_hub', default=False, help='save the model to huggingface', type=bool)
-    
-    parser.add_argument('--num_labels', type=int, default=2) # number of classes in the dataset
-
-    ## Explainability based metrics
-    parser.add_argument('--explain_sold', default=False, help='Generate Explainablity Metrics', type=bool)
-    parser.add_argument('--top_k', default=5, help='the top num of attention values to evaluate on explainable metrics')
-    parser.add_argument('--lime_n_sample', default=100, help='the num of samples for lime explainer')
-
-    ## User given experiment name
+    # OUTPUT AND SAVING
+    parser.add_argument('--dir_result', type=str, default='results', help='directory to save results')
     parser.add_argument('--exp_save_name', type=str, default=None, help='an experiment name')
-
-    ## Use a shorter file name for model checkpoints
     parser.add_argument('--short_name', default=False, help='use a shorter name for model checkpoints', type=bool)
 
-    #TEMP Skip arg for testing data augmentation
-    parser.add_argument('--skip', default=False, help='skip data augmentation', type=bool)
+    # WEIGHTS & BIASES CONFIG
+    parser.add_argument('--wandb_project', type=str, default='subasa-llm', help='Weights & Biases project name')
+    parser.add_argument('--push_to_hub', default=False, help='save the model to huggingface', type=bool)
+    parser.add_argument('--huggingface_repo', type=str, help='HuggingFace repository name when pushing to hub')
 
-
-    # Use Augmented Dataset
+    # DATASET AUGMENTATION
+    parser.add_argument('--skip_empty_rat', default=False, help='skip empty rationales', type=bool, required=False)
     parser.add_argument('--use_augmented_dataset', default=False, help='use augmented dataset', type=bool)
-
 
     return parser.parse_args()
 
