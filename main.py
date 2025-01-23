@@ -320,9 +320,36 @@ class OffensiveLanguageDetector:
             
                 text_streamer = TextStreamer(tokenizer, skip_prompt = True)
                 gen = model.generate(input_ids, streamer = text_streamer, max_new_tokens = 128, pad_token_id = tokenizer.eos_token_id)
-                print(gen)
-            
+                generated_answer = tokenizer.decode(gen[0], skip_special_tokens = False)
+                # Extract the assistant response between the markers
 
+                gen_label, gen_offensive_phrases = self._extract_components(generated_answer)
+               
+                
+                predicted_labels.append(gen_label)
+                predicted_offensive_phrases.append(gen_offensive_phrases)
+
+
+
+            actual_binary = [1 if label.strip() == 'OFF' else 0 for label in true_labels]
+            predicted_binary = [1 if label.strip() == 'OFF' else 0 for label in predicted_labels]
+
+            clas_rprt = classification_report(actual_binary, predicted_binary, 
+                             target_names=['NOT', 'OFF'])
+            wandb.log({"classification_report": clas_rprt})
+
+            # Create table data by zipping all lists together
+            table_data = list(zip(true_labels, predicted_labels, actual_tweets_list, 
+                                offensive_phrases_list, predicted_offensive_phrases, 
+                                rationale_list, tokens_list))
+            
+            wandb_table_of_predictions = wandb.Table(
+                columns=["True Labels", "Predicted Labels", "Actual Tweet", 
+                        "Actual Offensive Phrases", "Predicted Offensive Phrases", 
+                        "Rationale", "Tokens"], 
+                data=table_data
+            )
+            wandb.log({"Table_of_predictions": wandb_table_of_predictions})
             
         except Exception as e:
             self.logger.error(f"Testing failed: {str(e)}")
