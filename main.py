@@ -215,18 +215,18 @@ class OffensiveLanguageDetector:
             model, tokenizer = self._load_model_and_tokenizer()
             dataset = self._prepare_dataset(tokenizer)
 
-            random_samples = dataset.shuffle().select(range(5))
-            for sample in random_samples:
-                print(sample)
-                print('\n')
+            # random_samples = dataset.shuffle().select(range(5))
+            # for sample in random_samples:
+            #     print(sample)
+            #     print('\n')
 
 
             training_args = TrainingArguments(
                 per_device_train_batch_size=self.args.per_device_train_batch_size,
                 gradient_accumulation_steps=self.args.gradient_accumulation_steps,
                 warmup_steps=self.args.warmup_steps,
-                num_train_epochs=self.args.epochs if not self.args.max_steps else None,
-                max_steps=self.args.max_steps,
+                # num_train_epochs=self.args.epochs if not self.args.max_steps else None,
+                # max_steps=self.args.max_steps,
                 learning_rate=self.args.lr,
                 fp16=not is_bfloat16_supported(),
                 bf16=is_bfloat16_supported(),
