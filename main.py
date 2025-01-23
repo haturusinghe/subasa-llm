@@ -152,22 +152,26 @@ class OffensiveLanguageDetector:
 
     def _create_message(self, text: str, label: str = None, offensive_phrases: str = '', is_testing: bool = False) -> dict:
         """Create a message dictionary for the model"""
+        model_type = self._get_model_type()
+        
+        if model_type == "mistral":
+            system_msg = "<|system|>You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide phrases in the tweet that you find offensive.</s>"
+            user_msg = f"<|user|>determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'</s>"
+            if not is_testing and label:
+                assistant_msg = f"<|assistant|>{label}\n{offensive_phrases}</s>"
+        else:
+            system_msg = "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide phrases in the tweet that you find offensive."
+            user_msg = f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
+            if not is_testing and label:
+                assistant_msg = f"{label}\n{offensive_phrases}"
+
         messages = [
-            {
-                "role": "system",
-                "content": "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide a phrases in the tweet that you find offensive."
-            },
-            {
-                "role": "user", 
-                "content": f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
-            }
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg}
         ]
         
-        if not is_testing:
-            messages.append({
-                "role": "assistant",
-                "content": f"{label}\n{offensive_phrases}"
-            })
+        if not is_testing and label:
+            messages.append({"role": "assistant", "content": assistant_msg})
         
         return {"messages": messages}
 
