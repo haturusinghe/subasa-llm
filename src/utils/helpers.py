@@ -13,6 +13,7 @@ import torch_optimizer as optim
 from transformers import XLMRobertaTokenizer, XLMRobertaModel, XLMRobertaConfig,XLMRobertaForTokenClassification, XLMRobertaForSequenceClassification
 
 from huggingface_hub import whoami
+from huggingface_hub import create_repo, HfApi
 
 from src.models.custom_models import XLMRobertaCustomForTCwMRP
 from src.utils.logging_utils import setup_logging
@@ -40,7 +41,7 @@ def save_checkpoint(args, model, tokenizer):
     Returns:
         tuple: (local_save_path, huggingface_repo_url)
     """
-    repo_id = f"haturusinghe/{args.exp_save_name}"
+    repo_id = f"s-haturusinghe/{args.exp_save_name}"
     save_path = None
     huggingface_repo_url = None
 
@@ -66,6 +67,8 @@ def save_checkpoint(args, model, tokenizer):
     try:
         now = datetime.now()
         time_now = (now.strftime('%d%m%Y-%H%M'))
+
+        create_repo(repo_id, token=hf_token, exist_ok=True)
         
         for config_name, config in quantization_configs.items():
             if config['enabled']:
@@ -74,7 +77,7 @@ def save_checkpoint(args, model, tokenizer):
                     repo_id,
                     tokenizer,
                     quantization_method=config['method'],
-                    token=""  # Add your token here
+                    token=hf_token
                 )
 
 
