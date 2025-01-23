@@ -238,6 +238,11 @@ class OffensiveLanguageDetector:
                 report_to='wandb'
             )
 
+            if self.args.max_steps:
+                training_args.max_steps = self.args.max_steps
+            else:
+                training_args.num_train_epochs = self.args.epochs
+
             trainer = SFTTrainer(
                 model=model,
                 tokenizer=tokenizer,
