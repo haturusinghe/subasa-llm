@@ -334,8 +334,24 @@ class OffensiveLanguageDetector:
                 model = FastLanguageModel.from_pretrained(self.args.test_model_path)
             
             FastLanguageModel.for_inference(model)
+            true_labels = []
+            predicted_labels = []
+            predicted_offensive_phrases = []
+            actual_tweets_list, offensive_phrases_list, rationale_list, tokens_list = [], [], [], []
 
-            for test_sample in dataset:
+            for test_sample in dataset.select(range(5)):
+                actual_tweet = test_sample['actual_tweet']
+                label = test_sample['label']
+                rationale = test_sample['rationale']
+                offensive_phrases = test_sample['offensive_phrases']
+                tokens = test_sample['tokens']
+
+                actual_tweets_list.append(actual_tweet)
+                offensive_phrases_list.append(offensive_phrases)
+                rationale_list.append(rationale)
+                tokens_list.append(tokens)
+                true_labels.append(label)
+                
                 input_ids = tokenizer.apply_chat_template(
                 test_sample,
                 add_generation_prompt = True,
