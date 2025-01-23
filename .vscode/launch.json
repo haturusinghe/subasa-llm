@@ -6,13 +6,15 @@
     "configurations": [
 
         {
-            "name": "Python Debugger: Current File with Arguments",
+            "name": "Short - Save to HF End",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
-                
+                "--max_steps", "2",
+                "--push_to_hub", "True",
+                "--exp_save_name", "llama-3.2-ft-debug",
             ]
         }
     ]
