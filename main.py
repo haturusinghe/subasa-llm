@@ -153,15 +153,20 @@ class OffensiveLanguageDetector:
     def _create_message(self, text: str, label: str = None, offensive_phrases: str = '', is_testing: bool = False) -> dict:
         """Create a message dictionary for the model"""
         model_type = self._get_model_type()
+
+        system_msg = """You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". For offensive tweets, identify and list the specific offensive phrases without translation.\n"""
+
+        user_msg = f"Please classify the following tweet as \"OFF\" or \"NOT\". If offensive, list the specific offensive phrases:\n\n'{text}'"
+
         
         if model_type == "mistral":
-            system_msg = "<|system|>You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide phrases in the tweet that you find offensive.</s>"
-            user_msg = f"<|user|>determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'</s>"
+            # system_msg = "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide phrases in the tweet that you find offensive. You should only explicityl state the offensive phrases and not give any kind of translation\n"
+            # user_msg = f"Determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
             if not is_testing and label:
-                assistant_msg = f"<|assistant|>{label}\n{offensive_phrases}</s>"
+                assistant_msg = f"{label}\n{offensive_phrases}"
         else:
-            system_msg = "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide phrases in the tweet that you find offensive."
-            user_msg = f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
+            # system_msg = "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide phrases in the tweet that you find offensive."
+            # user_msg = f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
             if not is_testing and label:
                 assistant_msg = f"{label}\n{offensive_phrases}"
 
@@ -214,14 +219,15 @@ class OffensiveLanguageDetector:
         dataset = Dataset.from_list(messages_list)
         
         def formatting_prompts_func(examples):
-            return {
-                "text": [
+            dls = [
                     tokenizer.apply_chat_template(
                         convo, 
                         tokenize=False, 
                         add_generation_prompt=False
                     ) for convo in examples["messages"]
                 ]
+            return {
+                "text": dls
             }
         
         return dataset.map(formatting_prompts_func, batched=True)
@@ -232,10 +238,10 @@ class OffensiveLanguageDetector:
             model, tokenizer = self._load_model_and_tokenizer()
             dataset = self._prepare_dataset(tokenizer)
 
-            # random_samples = dataset.shuffle().select(range(5))
-            # for sample in random_samples:
-            #     print(sample)
-            #     print('\n')
+            random_samples = dataset.shuffle().select(range(1))
+            for sample in random_samples:
+                print(sample)
+                print('\n')
 
             from datetime import datetime
 
@@ -286,11 +292,20 @@ class OffensiveLanguageDetector:
 
             self._update_wandb_config({"start_gpu_memory": start_gpu_memory, "max_memory": max_memory})
 
-            trainer = train_on_responses_only(
-                trainer,
-                instruction_part="<|start_header_id|>user<|end_header_id|>\n\n",
-                response_part="<|start_header_id|>assistant<|end_header_id|>\n\n",
-            )
+            model_type = self._get_model_type()
+        
+            if model_type == "llama":
+                trainer = train_on_responses_only(
+                    trainer,
+                    instruction_part="<|start_header_id|>user<|end_header_id|>\n\n",
+                    response_part="<|start_header_id|>assistant<|end_header_id|>\n\n",
+                )
+            elif model_type == "mistral":
+                trainer = train_on_responses_only(
+                    trainer,
+                    instruction_part="[INST]" , #"<|user|>",
+                    response_part= "[/INST]"  #"<|assistant|>",
+                )
 
             trainer_stats = trainer.train()
             self._log_training_stats(trainer_stats)
@@ -344,8 +359,15 @@ class OffensiveLanguageDetector:
             predicted_offensive_phrases = []
             actual_tweets_list, offensive_phrases_list, rationale_list, tokens_list = [], [], [], []
 
+            length_of_dataset = len(dataset)
+            counter = 0
+
             model_type = self._get_model_type()
-            for test_sample in dataset:
+            # for test_sample in dataset.select(range(5)): #TODO remove the range after testing
+            for test_sample in dataset: #TODO remove the range after testing
+                counter += 1
+                print(f"Processing sample {counter}/{length_of_dataset} \n")
+
                 actual_tweet = test_sample['actual_tweet']
                 label = test_sample['label']
                 rationale = test_sample['rationale']
@@ -377,7 +399,7 @@ class OffensiveLanguageDetector:
             predicted_binary = [1 if label.strip() == 'OFF' else 0 for label in predicted_labels]
 
             clas_rprt = classification_report(actual_binary, predicted_binary, 
-                             target_names=['NOT', 'OFF'])
+                             target_names=['NOT', 'OFF'], output_dict=True)
             wandb.log({"classification_report": clas_rprt})
             end_time = datetime.now()
             duration = end_time - start_time
@@ -431,17 +453,23 @@ class OffensiveLanguageDetector:
         """Extract label and offensive phrases based on model type"""
         if model_type == "mistral":
             # Extract content between <|assistant|> and </s>
-            assistant_content = text.split("<|assistant|>")[-1].split("</s>")[0].strip()
+            assistant_content = text.split("[/INST]")[-1].split("</s>")[0].strip()
+            assistant_content = assistant_content.split("\n")
+            # remove newline characters in assistant_content array
+            # if assistant_content[1]:
+            #     off_phrases = assistant_content[1].split(":")[-1]
+            #     assistant_content[1] = off_phrases
         else:
             # Extract content after assistant header for Llama
             assistant_content = text.split("<|start_header_id|>assistant<|end_header_id|>")[-1].strip("<|eot_id|>").strip()
+            assistant_content = assistant_content.split("\n")
         
         # Split components by newline
-        components = assistant_content.strip().split("\n\n")
+        # components = assistant_content.strip().split("\n\n")
         
         # Extract label and offensive phrases
-        lbl = components[0]
-        offensive_phrases = components[1] if len(components) > 1 else ""
+        lbl = assistant_content[0]
+        offensive_phrases = assistant_content[-1] if len(assistant_content) > 1 else ""
         
         return lbl, offensive_phrases
 
