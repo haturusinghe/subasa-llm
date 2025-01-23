@@ -23,6 +23,7 @@ from transformers import (
 )
 from trl import SFTTrainer
 
+from sklearn.metrics import classification_report
 from src.dataset.dataset import SOLDAugmentedDataset, SOLDDataset
 from src.utils.helpers import get_device, save_checkpoint, setup_directories
 from src.utils.logging_utils import setup_logging
@@ -198,7 +199,7 @@ class OffensiveLanguageDetector:
                 gradient_accumulation_steps=4,
                 warmup_steps=5, 
                 # num_train_epochs = 1, # Set this for 1 full training run.
-                max_steps=10, # remove for full training run
+                max_steps=2, # remove for full training run
                 learning_rate=2e-4,
                 fp16=not is_bfloat16_supported(),
                 bf16=is_bfloat16_supported(),
@@ -355,7 +356,7 @@ class OffensiveLanguageDetector:
                 true_labels.append(label)
                 
                 input_ids = tokenizer.apply_chat_template(
-                test_sample,
+                test_sample['messages'],
                 add_generation_prompt = True,
                 return_tensors = "pt",
                     ).to("cuda")
