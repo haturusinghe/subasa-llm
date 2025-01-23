@@ -248,6 +248,81 @@ class OffensiveLanguageDetector:
         finally:
             wandb.finish()
 
+    def _prepare_dataset_test(self, tokenizer) -> Dataset:
+            """Prepare and process the dataset"""
+            try:
+                dataset_cls = SOLDAugmentedDataset if self.args.use_augmented_dataset else SOLDDataset
+                train_dataset = dataset_cls(self.args, 'test')
+                train_dataloader = DataLoader(train_dataset, 
+                                            batch_size=1, 
+                                            shuffle=True)
+                
+                messages_list = []
+                for batch in train_dataloader:
+                    text = batch[0][0]
+            
+                    
+                    messages_list.append({
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\". And if the tweet is OFFENSIVE, provide a phrases in the tweet that you find offensive."
+                            },
+                            {
+                                "role": "user", 
+                                "content": f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
+                            },
+                            {
+                                "role": "assistant",
+                                "content": ""
+                            }
+                        ]
+                    })
+
+
+                dataset = Dataset.from_list(messages_list)
+
+                def formatting_prompts_func(examples):
+                    convos = examples["messages"]
+                    texts = [tokenizer.apply_chat_template(convo, 
+                                                        tokenize=False, 
+                                                        add_generation_prompt=False) 
+                            for convo in convos]
+                    return {"text": texts}
+
+                return dataset.map(formatting_prompts_func, batched=True)
+            except Exception as e:
+                self.logger.error(f"Error preparing dataset: {str(e)}")
+                raise
+
+
+    def test(self, model, tokenizer) -> None:
+        """Test the model"""
+        try:
+            dataset = self._prepare_dataset_test(tokenizer)
+            if model == None and self.args.test_model_path:
+                model = FastLanguageModel.from_pretrained(self.args.test_model_path)
+            
+            FastLanguageModel.for_inference(model)
+
+            for test_sample in dataset:
+                input_ids = tokenizer.apply_chat_template(
+                test_sample,
+                add_generation_prompt = True,
+                return_tensors = "pt",
+                    ).to("cuda")
+            
+            
+                text_streamer = TextStreamer(tokenizer, skip_prompt = True)
+                gen = model.generate(input_ids, streamer = text_streamer, max_new_tokens = 128, pad_token_id = tokenizer.eos_token_id)
+                print(gen)
+            
+
+            
+        except Exception as e:
+            self.logger.error(f"Testing failed: {str(e)}")
+            raise
+
     def _log_training_stats(self, trainer_stats: Dict[str, Any]) -> None:
         """Log training statistics"""
         gpu_stats = torch.cuda.get_device_properties(0)
