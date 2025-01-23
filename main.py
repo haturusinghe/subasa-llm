@@ -222,17 +222,17 @@ class OffensiveLanguageDetector:
 
 
             training_args = TrainingArguments(
-                per_device_train_batch_size=2,
-                gradient_accumulation_steps=4,
-                warmup_steps=5, 
-                # num_train_epochs = 1, # Set this for 1 full training run.
-                max_steps=2, # remove for full training run
-                learning_rate=2e-4,
+                per_device_train_batch_size=self.args.per_device_train_batch_size,
+                gradient_accumulation_steps=self.args.gradient_accumulation_steps,
+                warmup_steps=self.args.warmup_steps,
+                num_train_epochs=self.args.epochs if not self.args.max_steps else None,
+                max_steps=self.args.max_steps,
+                learning_rate=self.args.lr,
                 fp16=not is_bfloat16_supported(),
                 bf16=is_bfloat16_supported(),
-                logging_steps=1,
+                logging_steps=self.args.logging_steps,
                 optim="adamw_8bit",
-                weight_decay=0.01,
+                weight_decay=self.args.weight_decay,
                 lr_scheduler_type="linear",
                 output_dir=self.args.dir_result,
                 report_to='wandb'
@@ -434,8 +434,14 @@ def parse_args():
     # TRAINING PARAMETERS
     parser.add_argument('--batch_size', type=int, default=16, help='training batch size')
     parser.add_argument('--epochs', type=int, default=1, help='number of training epochs')
-    parser.add_argument('--lr', type=float, default=0.00002, help='learning rate')
-    
+    parser.add_argument('--lr', type=float, default=2e-4, help='learning rate')
+    parser.add_argument('--warmup_steps', type=int, default=5, help='number of warmup steps')
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=4, help='number of gradient accumulation steps')
+    parser.add_argument('--max_steps', type=int, default=None, help='maximum number of training steps (overrides epochs if set)')
+    parser.add_argument('--weight_decay', type=float, default=0.01, help='weight decay for optimizer')
+    parser.add_argument('--logging_steps', type=int, default=1, help='number of steps between logging')
+    parser.add_argument('--per_device_train_batch_size', type=int, default=2, help='batch size per device during training')
+
     # OUTPUT AND SAVING
     parser.add_argument('--dir_result', type=str, default='results', help='directory to save results')
     parser.add_argument('--exp_save_name', type=str, default=None, help='an experiment name')
