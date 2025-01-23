@@ -1,4 +1,8 @@
 wandb/
+_finetune/
+haturusinghe/
+model_f16_1/
+model_f16/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -170,3 +174,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+model_f16/config.json
+model_f16/pytorch_model-00001-of-00002.bin
