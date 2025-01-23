@@ -344,6 +344,7 @@ class OffensiveLanguageDetector:
             predicted_offensive_phrases = []
             actual_tweets_list, offensive_phrases_list, rationale_list, tokens_list = [], [], [], []
 
+            model_type = self._get_model_type()
             for test_sample in dataset:
                 actual_tweet = test_sample['actual_tweet']
                 label = test_sample['label']
@@ -367,7 +368,7 @@ class OffensiveLanguageDetector:
                 gen = model.generate(input_ids, streamer = text_streamer, max_new_tokens = 128, pad_token_id = tokenizer.eos_token_id)
                 generated_answer = tokenizer.decode(gen[0], skip_special_tokens = False)
 
-                gen_label, gen_offensive_phrases = self._extract_components(generated_answer)
+                gen_label, gen_offensive_phrases = self._extract_components(generated_answer, model_type)
                 
                 predicted_labels.append(gen_label)
                 predicted_offensive_phrases.append(gen_offensive_phrases)
@@ -443,7 +444,6 @@ class OffensiveLanguageDetector:
         offensive_phrases = components[1] if len(components) > 1 else ""
         
         return lbl, offensive_phrases
-
 
     def _log_training_stats(self, trainer_stats: Dict[str, Any]) -> None:
         """Log training statistics"""
