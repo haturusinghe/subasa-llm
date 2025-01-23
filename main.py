@@ -351,6 +351,9 @@ class OffensiveLanguageDetector:
                 model, tokenizer = self._load_model_and_tokenizer()
 
             dataset = self._prepare_dataset(tokenizer, mode='test')
+
+            if self.args.debug:
+                dataset = dataset.select(range(5))
             
             start_time = datetime.now()
             FastLanguageModel.for_inference(model)
