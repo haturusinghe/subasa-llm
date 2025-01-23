@@ -16,6 +16,7 @@
                 "--push_to_hub", "True",
                 "--exp_save_name", "llama-3.2-ft-debug",
                 "--wandb_project", "llama-3.2-ft-debug",
+                "--pretrained_model", "unsloth/Llama-3.2-3B-Instruct",
             ]
         }
     ]
