@@ -544,6 +544,9 @@ def parse_args():
     parser.add_argument('--skip_empty_rat', default=False, help='skip empty rationales', type=bool, required=False)
     parser.add_argument('--use_augmented_dataset', default=False, help='use augmented dataset', type=bool)
 
+    #DEBUG
+    parser.add_argument('--debug', default=False, help='debug mode', type=bool)
+
     return parser.parse_args()
 
 def main():
