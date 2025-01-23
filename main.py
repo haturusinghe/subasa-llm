@@ -246,7 +246,11 @@ class OffensiveLanguageDetector:
             self.logger.error(f"Training failed: {str(e)}")
             raise
         finally:
-            wandb.finish()
+            if self.args.test:
+                self.logger.info("Testing")
+                self.test(model, tokenizer)
+            else:
+                wandb.finish()
 
     def _prepare_dataset_test(self, tokenizer) -> Dataset:
             """Prepare and process the dataset"""
