@@ -361,19 +361,14 @@ class OffensiveLanguageDetector:
                 return_tensors = "pt",
                     ).to("cuda")
             
-            
                 text_streamer = TextStreamer(tokenizer, skip_prompt = True)
                 gen = model.generate(input_ids, streamer = text_streamer, max_new_tokens = 128, pad_token_id = tokenizer.eos_token_id)
                 generated_answer = tokenizer.decode(gen[0], skip_special_tokens = False)
-                # Extract the assistant response between the markers
 
                 gen_label, gen_offensive_phrases = self._extract_components(generated_answer)
-               
                 
                 predicted_labels.append(gen_label)
                 predicted_offensive_phrases.append(gen_offensive_phrases)
-
-
 
             actual_binary = [1 if label.strip() == 'OFF' else 0 for label in true_labels]
             predicted_binary = [1 if label.strip() == 'OFF' else 0 for label in predicted_labels]
@@ -382,18 +377,42 @@ class OffensiveLanguageDetector:
                              target_names=['NOT', 'OFF'])
             wandb.log({"classification_report": clas_rprt})
 
-            # Create table data by zipping all lists together
-            table_data = list(zip(true_labels, predicted_labels, actual_tweets_list, 
-                                offensive_phrases_list, predicted_offensive_phrases, 
-                                rationale_list, tokens_list))
-            
-            wandb_table_of_predictions = wandb.Table(
+            # Create table data
+            table_data = [
+                {
+                    "True Labels": tl,
+                    "Predicted Labels": pl,
+                    "Actual Tweet": at,
+                    "Actual Offensive Phrases": aop,
+                    "Predicted Offensive Phrases": pop,
+                    "Rationale": rat,
+                    "Tokens": tok
+                }
+                for tl, pl, at, aop, pop, rat, tok in zip(
+                    true_labels, predicted_labels, actual_tweets_list,
+                    offensive_phrases_list, predicted_offensive_phrases,
+                    rationale_list, tokens_list
+                )
+            ]
+
+            # Save to JSON with UTF-8 encoding
+            json_path = os.path.join(self.args.dir_result, "predictions.json")
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(table_data, f, ensure_ascii=False, indent=2)
+
+            # Log JSON file to wandb
+            wandb.save(json_path)
+
+            # Also create wandb table
+            wandb_table = wandb.Table(
                 columns=["True Labels", "Predicted Labels", "Actual Tweet", 
                         "Actual Offensive Phrases", "Predicted Offensive Phrases", 
                         "Rationale", "Tokens"], 
-                data=table_data
+                data=list(zip(true_labels, predicted_labels, actual_tweets_list, 
+                            offensive_phrases_list, predicted_offensive_phrases, 
+                            rationale_list, tokens_list))
             )
-            wandb.log({"Table_of_predictions": wandb_table_of_predictions})
+            wandb.log({"Table_of_predictions": wandb_table})
             
         except Exception as e:
             self.logger.error(f"Testing failed: {str(e)}")
