@@ -129,8 +129,23 @@ class OffensiveLanguageDetector:
                 # Process offensive phrases outside the f-string
                 offensive_phrases = ''
                 if label == 'OFF' and rationale:
-                    phrases = [tokens[i] for i, r in enumerate(rationale) if r == 1]
-                    offensive_phrases = f'Offensive Phrases: {" ".join(phrases)}' if phrases else ''
+                    # Initialize variables for phrase grouping
+                    phrases = []
+                    current_phrase = []
+                    
+                    # Iterate through rationale and tokens together
+                    for i, (r, token) in enumerate(zip(rationale, tokens)):
+                        if r == 1:
+                            current_phrase.append(token)
+                        elif current_phrase:  # r == 0 and we have accumulated tokens
+                            phrases.append(" ".join(current_phrase))
+                            current_phrase = []
+                    
+                    # Don't forget to add the last phrase if it exists
+                    if current_phrase:
+                        phrases.append(" ".join(current_phrase))
+                    
+                    offensive_phrases = f'Offensive Phrases: {", ".join(phrases)}' if phrases else ''
                     print()
                 
                 messages_list.append({
