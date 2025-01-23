@@ -1,6 +1,7 @@
 wandb/
 _finetune/
 haturusinghe/
+s-haturusinghe/
 model_f16_1/
 model_f16/
 # Byte-compiled / optimized / DLL files
@@ -178,3 +179,4 @@ cython_debug/
 .pypirc
 model_f16/config.json
 model_f16/pytorch_model-00001-of-00002.bin
+s-haturusinghe/llama-3.2-ft-v1/config.json
