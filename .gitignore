@@ -1,4 +1,5 @@
 wandb/
+predictions*
 _finetune/
 haturusinghe/
 s-haturusinghe/
