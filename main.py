@@ -354,6 +354,23 @@ class OffensiveLanguageDetector:
         except Exception as e:
             self.logger.error(f"Testing failed: {str(e)}")
             raise
+        finally:
+            wandb.finish()
+    
+    @staticmethod
+    def _extract_components(text):
+        # Find the last section after "assistant" header
+        last_section = text.split("<|start_header_id|>assistant<|end_header_id|>")[-1]
+        
+        # Split the components by newline
+        components = last_section.strip("<|eot_id|>").strip().split("\n\n")
+        
+        # Extract LBL and OFFENSIVE PHRASES LIST
+        lbl = components[0]
+        offensive_phrases = components[1] if len(components) > 1 else ""
+        
+        return lbl, offensive_phrases
+
 
     def _log_training_stats(self, trainer_stats: Dict[str, Any]) -> None:
         """Log training statistics"""
