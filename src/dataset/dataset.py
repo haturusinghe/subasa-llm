@@ -69,27 +69,9 @@ class SOLDDataset(Dataset):
             idx (int): Index of the item to retrieve
             
         Returns:
-            dict: Message format for language model containing:
-                - System prompt defining the task
-                - User message with the text to classify
-                - Assistant response with correct label
+            tuple: (text, label) containing the tweet text and label (OFF or NOT)
         """
-        return {
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are an emotionally intelligent assistant who speaks Sinhala and English Languages. Your task is to determine whether each tweet is OFFENSIVE or NOT OFFENSIVE. For each tweet, provide a single word as your output: either \"OFF\" or \"NOT\"."
-                },
-                {
-                    "role": "user", 
-                    "content": f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{self.dataset[idx]['text']}'"
-                },
-                {
-                    "role": "assistant",
-                    "content": f"${self.dataset[idx]['label']}"
-                }
-            ]
-        }
+        return self.dataset[idx]['text'], self.dataset[idx]['label'], literal_eval(self.dataset[idx]['rationales']), self.dataset[idx]['tokens']
 
 
 
