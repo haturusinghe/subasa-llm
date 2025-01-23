@@ -27,6 +27,7 @@ from src.dataset.dataset import SOLDAugmentedDataset, SOLDDataset
 from src.utils.helpers import get_device, save_checkpoint, setup_directories
 from src.utils.logging_utils import setup_logging
 from unsloth.chat_templates import get_chat_template, train_on_responses_only
+from unsloth import is_bfloat16_supported
 
 @dataclass
 class ModelConfig:
