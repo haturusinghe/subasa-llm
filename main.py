@@ -305,6 +305,7 @@ class OffensiveLanguageDetector:
             if model == None and self.args.hf_model_path:
                 model = FastLanguageModel.from_pretrained(self.args.hf_model_path)
             
+            start_time = datetime.now()
             FastLanguageModel.for_inference(model)
             true_labels = []
             predicted_labels = []
@@ -345,6 +346,9 @@ class OffensiveLanguageDetector:
             clas_rprt = classification_report(actual_binary, predicted_binary, 
                              target_names=['NOT', 'OFF'])
             wandb.log({"classification_report": clas_rprt})
+            end_time = datetime.now()
+            duration = end_time - start_time
+            wandb.log({"testing_duration": duration.total_seconds()})
 
             # Create table data
             table_data = [
