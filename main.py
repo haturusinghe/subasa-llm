@@ -360,8 +360,8 @@ def parse_args():
     parser.add_argument('--dataset', default='sold', choices=dataset_choices, help='a dataset to use')
 
     # TESTING 
-    parser.add_argument('--test', default=False, help='test the model', type=bool)
-    parser.add_argument('--test_model_path', type=str, required=False, help='the checkpoint path to test', default=None)
+    parser.add_argument('--test', default=True, help='test the model', type=bool)
+    parser.add_argument('--test_model_path', type=str, required=False, help='the checkpoint path to test', default="test/checkpoint-1001")
 
     # PRETRAINED MODEL
     model_choices = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct-bnb-4bit', 
