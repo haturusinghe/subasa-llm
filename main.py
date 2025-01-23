@@ -342,7 +342,7 @@ class OffensiveLanguageDetector:
             predicted_offensive_phrases = []
             actual_tweets_list, offensive_phrases_list, rationale_list, tokens_list = [], [], [], []
 
-            for test_sample in dataset.select(range(5)):
+            for test_sample in dataset:
                 actual_tweet = test_sample['actual_tweet']
                 label = test_sample['label']
                 rationale = test_sample['rationale']
