@@ -30,22 +30,49 @@ def get_device():
         return torch.device('cpu')
 
 
-def save_checkpoint(trained_model):
+def save_checkpoint(args, model, tokenizer):
+    """
+    Save model checkpoint locally and/or to HuggingFace Hub with different quantization options.
+    Args:
+        args: Arguments containing experiment configuration
+        model: The trained model to save
+        tokenizer: The tokenizer used with the model
+    Returns:
+        tuple: (local_save_path, huggingface_repo_url)
+    """
+    repo_id = f"haturusinghe/{args.exp_name}"
+    save_path = None
+    huggingface_repo_url = None
 
-        # Save to 8bit Q8_0
-    if False: trained_model.save_pretrained_gguf("model", tokenizer,)
-    # Remember to go to https://huggingface.co/settings/tokens for a token!
-    # And change hf to your username!
-    if False: trained_model.push_to_hub_gguf("hf/model", tokenizer, token = "")
+    # Define quantization configurations
+    quantization_configs = {
+        'default': {'method': None, 'enabled': False},
+        'f16': {'method': "f16", 'enabled': True},
+        'q4_k_m': {'method': "q4_k_m", 'enabled': False},
+        'q8_0': {'method': None, 'enabled': False}
+    }
 
-    # Save to 16bit GGUF
-    if False: trained_model.save_pretrained_gguf("model2", tokenizer, quantization_method = "f16")
-    if True: trained_model.push_to_hub_gguf("shadicopty/Llama3.2-3b-taxadvisor", tokenizer, quantization_method = "f16", token = "")
+    # Save locally if configured
+    for config_name, config in quantization_configs.items():
+        if config['enabled']:
+            save_path = f"model_{config_name}"
+            model.save_pretrained_gguf(
+                save_path,
+                tokenizer,
+                quantization_method=config['method']
+            )
 
-    # Save to q4_k_m GGUF
-    if False: trained_model.save_pretrained_gguf("model", tokenizer, quantization_method = "q4_k_m")
-    if False: trained_model.push_to_hub_gguf("hf/model", tokenizer, quantization_method = "q4_k_m", token = "")
-    
+    # Push to HuggingFace Hub if configured
+    for config_name, config in quantization_configs.items():
+        if config['enabled']:
+            huggingface_repo_url = repo_id
+            model.push_to_hub_gguf(
+                repo_id,
+                tokenizer,
+                quantization_method=config['method'],
+                token=""  # Add your token here
+            )
+
     return save_path, huggingface_repo_url
 
 def add_tokens_to_tokenizer(args, tokenizer):
