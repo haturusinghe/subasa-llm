@@ -301,12 +301,14 @@ class OffensiveLanguageDetector:
                             {
                                 "role": "user", 
                                 "content": f"determine whether the following Tweet is OFFENSIVE (OFF) or NOT OFFENSIVE (NOT): '{text}'"
-                            },
-                            {
-                                "role": "assistant",
-                                "content": ""
                             }
-                        ]
+                    
+                        ],
+                        "actual_tweet": text,
+                        "label": batch[1][0],
+                        "rationale": batch[2],
+                        "offensive_phrases": phrases_only,
+                        "tokens": batch[3][0].split()
                     })
 
 
