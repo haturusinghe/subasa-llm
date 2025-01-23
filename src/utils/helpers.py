@@ -40,7 +40,7 @@ def save_checkpoint(args, model, tokenizer):
     Returns:
         tuple: (local_save_path, huggingface_repo_url)
     """
-    repo_id = f"haturusinghe/{args.exp_name}"
+    repo_id = f"haturusinghe/{args.exp_save_name}"
     save_path = None
     huggingface_repo_url = None
 
@@ -52,26 +52,71 @@ def save_checkpoint(args, model, tokenizer):
         'q8_0': {'method': None, 'enabled': False}
     }
 
-    # Save locally if configured
-    for config_name, config in quantization_configs.items():
-        if config['enabled']:
-            save_path = f"model_{config_name}"
-            model.save_pretrained_gguf(
-                save_path,
-                tokenizer,
-                quantization_method=config['method']
-            )
+    # Push to Hugging Face Hub
+    huggingface_repo_url = None
+    # Check if the HF_TOKEN environment variable is set
+    hf_token = os.getenv("HF_TOKEN")
 
-    # Push to HuggingFace Hub if configured
-    for config_name, config in quantization_configs.items():
-        if config['enabled']:
-            huggingface_repo_url = repo_id
-            model.push_to_hub_gguf(
-                repo_id,
-                tokenizer,
-                quantization_method=config['method'],
-                token=""  # Add your token here
-            )
+    if hf_token:
+        user = whoami(token=hf_token)
+    else:
+        print("No Hugging Face token found in environment variables. Please log in.")
+        login()
+    
+    try:
+        now = datetime.now()
+        time_now = (now.strftime('%d%m%Y-%H%M'))
+        
+        for config_name, config in quantization_configs.items():
+            if config['enabled']:
+                huggingface_repo_url = repo_id
+                model.push_to_hub_gguf(
+                    repo_id,
+                    tokenizer,
+                    quantization_method=config['method'],
+                    token=""  # Add your token here
+                )
+
+
+        markdown_file_save_path = os.path.join(args.dir_result, 'README.md')
+
+
+        with open(markdown_file_save_path, 'w') as f:
+            f.write(f"Wandb Run URL: {args.wandb_run_url}\n\n")
+            
+            f.write(f"""### Trainer Arguments:
+                "learning_rate": {args.lr}
+                "epochs": {args.epochs}
+                "batch_size": {args.batch_size}
+                "model": {args.pretrained_model}         
+                "seed": {args.seed}
+                "dataset": {args.dataset}
+                "skip_empty_rat": {args.skip_empty_rat} """)
+    
+        # Create model card
+        card_data = ModelCardData(
+            language="en",
+            license="mit",
+            model_name=args.exp_save_name,
+            base_model=args.pretrained_model,
+        )
+
+        card = ModelCard.from_template(
+            card_data = card_data,
+            template_path = markdown_file_save_path
+        )
+
+        
+        
+        # Push model card to hub
+        card.push_to_hub(f"s-haturusinghe/{args.exp_save_name}")
+        
+        huggingface_repo_url = f"https://huggingface.co/s-haturusinghe/{args.exp_save_name}"
+    
+    except Exception as e:
+            print(f"Error pushing to Hugging Face Hub: {str(e)}")
+            print("Continuing without pushing to hub...")
+    
 
     return save_path, huggingface_repo_url
 
