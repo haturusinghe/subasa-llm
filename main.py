@@ -266,7 +266,30 @@ class OffensiveLanguageDetector:
                 
                 messages_list = []
                 for batch in train_dataloader:
-                    text = batch[0][0]
+                    text, label, rationale, tokens = batch[0][0], batch[1][0], batch[2], batch[3][0].split()
+                
+                    # Process offensive phrases outside the f-string
+                    offensive_phrases = ''
+                    phrases_only = ''
+                    if label == 'OFF' and rationale:
+                        # Initialize variables for phrase grouping
+                        phrases = []
+                        current_phrase = []
+                        
+                        # Iterate through rationale and tokens together
+                        for i, (r, token) in enumerate(zip(rationale, tokens)):
+                            if r == 1:
+                                current_phrase.append(token)
+                            elif current_phrase:  # r == 0 and we have accumulated tokens
+                                phrases.append(" ".join(current_phrase))
+                                current_phrase = []
+                        
+                        # Don't forget to add the last phrase if it exists
+                        if current_phrase:
+                            phrases.append(" ".join(current_phrase))
+                        
+                        offensive_phrases = f'Offensive Phrases: {", ".join(phrases)}' if phrases else ''
+                        phrases_only = f"{', '.join(phrases)}" if phrases else ''
             
                     
                     messages_list.append({
