@@ -412,14 +412,19 @@ class OffensiveLanguageDetector:
             wandb.finish()
     
     @staticmethod
-    def _extract_components(text):
-        # Find the last section after "assistant" header
-        last_section = text.split("<|start_header_id|>assistant<|end_header_id|>")[-1]
+    def _extract_components(text, model_type="llama"):
+        """Extract label and offensive phrases based on model type"""
+        if model_type == "mistral":
+            # Extract content between <|assistant|> and </s>
+            assistant_content = text.split("<|assistant|>")[-1].split("</s>")[0].strip()
+        else:
+            # Extract content after assistant header for Llama
+            assistant_content = text.split("<|start_header_id|>assistant<|end_header_id|>")[-1].strip("<|eot_id|>").strip()
         
-        # Split the components by newline
-        components = last_section.strip("<|eot_id|>").strip().split("\n\n")
+        # Split components by newline
+        components = assistant_content.strip().split("\n\n")
         
-        # Extract LBL and OFFENSIVE PHRASES LIST
+        # Extract label and offensive phrases
         lbl = components[0]
         offensive_phrases = components[1] if len(components) > 1 else ""
         
