@@ -366,7 +366,6 @@ class OffensiveLanguageDetector:
             counter = 0
 
             model_type = self._get_model_type()
-            # for test_sample in dataset.select(range(5)): #TODO remove the range after testing
             for test_sample in dataset: #TODO remove the range after testing
                 counter += 1
                 print(f"Processing sample {counter}/{length_of_dataset} \n")
@@ -472,7 +471,8 @@ class OffensiveLanguageDetector:
         
         # Extract label and offensive phrases
         lbl = assistant_content[0]
-        offensive_phrases = assistant_content[-1] if len(assistant_content) > 1 else ""
+        offensive_phrases = assistant_content[1:]
+        offensive_phrases = " ".join(offensive_phrases) if offensive_phrases else ""
         
         return lbl, offensive_phrases
 
