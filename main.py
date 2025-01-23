@@ -29,7 +29,7 @@ from src.utils.helpers import get_device, save_checkpoint, setup_directories
 from src.utils.logging_utils import setup_logging
 from unsloth.chat_templates import get_chat_template, train_on_responses_only
 from unsloth import is_bfloat16_supported
-from src.utils.env import load_env_variables
+# from src.utils.env import load_env_variables
 
 @dataclass
 class ModelConfig:
@@ -520,7 +520,7 @@ def parse_args():
 
 def main():
     # Load environment variables
-    load_env_variables()
+    # load_env_variables()
     
     args = parse_args()
     args.exp_date = datetime.now().strftime("%m%d-%H%M")
