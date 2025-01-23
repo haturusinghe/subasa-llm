@@ -73,7 +73,7 @@ class OffensiveLanguageDetector:
         wandb.init(
             project=self.args.wandb_project,
             config=config,
-            name=f"{self.args.exp_name}_{'TRAIN' if not self.args.test else 'TEST'}"
+            name=f"{self.args.exp_name}"
         )
         
         self.args.wandb_run_url = wandb.run.get_url()
@@ -223,6 +223,11 @@ class OffensiveLanguageDetector:
             #     print(sample)
             #     print('\n')
 
+            from datetime import datetime
+
+            now = datetime.now()
+            time_now = (now.strftime('%d%m%Y-%H%M'))
+
 
             training_args = TrainingArguments(
                 per_device_train_batch_size=self.args.per_device_train_batch_size,
@@ -233,12 +238,13 @@ class OffensiveLanguageDetector:
                 learning_rate=self.args.lr,
                 fp16=not is_bfloat16_supported(),
                 bf16=is_bfloat16_supported(),
-                logging_steps=self.args.logging_steps,
+                # logging_steps=self.args.logging_steps,
                 optim="adamw_8bit",
                 weight_decay=self.args.weight_decay,
                 lr_scheduler_type="linear",
                 output_dir=self.args.dir_result,
-                report_to='wandb'
+                report_to='wandb',
+                run_name=self.args.exp_name + '_' + time_now,
             )
 
             if self.args.max_steps:
@@ -296,8 +302,8 @@ class OffensiveLanguageDetector:
         try:
             # dataset = self._prepare_dataset_test(tokenizer)
             dataset = self._prepare_dataset(tokenizer, mode='test')
-            if model == None and self.args.test_model_path:
-                model = FastLanguageModel.from_pretrained(self.args.test_model_path)
+            if model == None and self.args.hf_model_path:
+                model = FastLanguageModel.from_pretrained(self.args.hf_model_path)
             
             FastLanguageModel.for_inference(model)
             true_labels = []
@@ -431,7 +437,7 @@ def parse_args():
 
     # TESTING 
     parser.add_argument('--test', default=True, help='test the model', type=bool)
-    parser.add_argument('--test_model_path', type=str, required=False, help='the checkpoint path to test', default="test/checkpoint-1001")
+    parser.add_argument('--hf_model_path', type=str, required=False, help='the checkpoint path to test', default=None)
 
     # PRETRAINED MODEL
     model_choices = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct-bnb-4bit', 
