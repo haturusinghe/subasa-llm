@@ -462,8 +462,13 @@ def parse_args():
     parser.add_argument('--hf_model_path', type=str, required=False, help='the checkpoint path to test', default=None)
 
     # PRETRAINED MODEL
-    model_choices = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct-bnb-4bit', 
-                    'unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit', 'unsloth/Mistral-Small-Instruct-2409']
+    model_choices = [
+        'unsloth/Llama-3.2-3B-Instruct', 
+        'unsloth/Llama-3.2-1B-Instruct-bnb-4bit',
+        'unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit', 
+        'unsloth/Mistral-Small-Instruct-2409',
+        'unsloth/mistral-7b-instruct-v0.3-bnb-4bit'
+    ]
     parser.add_argument('--pretrained_model', default='unsloth/Llama-3.2-3B-Instruct', 
                        choices=model_choices, help='a pre-trained LLM')  
 
