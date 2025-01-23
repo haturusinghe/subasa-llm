@@ -87,6 +87,12 @@ class OffensiveLanguageDetector:
         np.random.seed(self.args.seed)
         random.seed(self.args.seed)
 
+    def _get_model_type(self) -> str:
+        """Determine the model type from the model name"""
+        if "mistral" in self.args.pretrained_model.lower():
+            return "mistral"
+        return "llama"
+
     def _load_model_and_tokenizer(self) -> Tuple[Any, Any]:
         """Load and configure the model and tokenizer"""
         try:
@@ -110,7 +116,11 @@ class OffensiveLanguageDetector:
                 loftq_config=None,
             )
 
-            tokenizer = get_chat_template(tokenizer, chat_template="llama-3.1")
+            model_type = self._get_model_type()
+            if model_type == "mistral":
+                tokenizer = get_chat_template(tokenizer, chat_template="mistral")
+            else:
+                tokenizer = get_chat_template(tokenizer, chat_template="llama-3.1")
             
             return model, tokenizer
         except Exception as e:
