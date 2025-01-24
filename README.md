@@ -1,6 +1,6 @@
 # Subasa LLM
 
-A Language Learning Model implementation focused on offensive language detection in Sinhala and English texts using state-of-the-art language models.
+A LLM implementation focused on offensive language detection in Sinhala and English texts using state-of-the-art language models.
 
 ## Description
 
