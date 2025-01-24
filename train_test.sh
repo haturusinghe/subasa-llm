@@ -8,7 +8,7 @@
 
 # Finetuning
 
-main.py --push_to_hub True --exp_save_name llama-3.1-8B-Finetuned-v2 --wandb_project unsloth_Llama-3.1-8B-Instruct-FTandEval --pretrained_model unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit --per_device_train_batch_size 4
+python main.py --push_to_hub True --exp_save_name llama-3.1-8B-Finetuned-v2 --wandb_project unsloth_Llama-3.1-8B-Instruct-FTandEval --pretrained_model unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit --per_device_train_batch_size 4
 
 
-main.py --push_to_hub True --exp_save_name llama-3.2-3B-Finetuned-v2 --wandb_project unsloth_Llama-3.2-3B-Instruct-FTandEval --pretrained_model unsloth/Llama-3.2-3B-Instruct --per_device_train_batch_size 4
+python main.py --push_to_hub True --exp_save_name llama-3.2-3B-Finetuned-v2 --wandb_project unsloth_Llama-3.2-3B-Instruct-FTandEval --pretrained_model unsloth/Llama-3.2-3B-Instruct --per_device_train_batch_size 4
