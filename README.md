@@ -1,14 +1,14 @@
 # Subasa LLM
 
-A LLM implementation focused on offensive language detection in Sinhala and English texts using state-of-the-art language models.
+A task-specific fine-tuning framework for large language models (LLMs) focused on offensive language detection in multilingual contexts, with evaluation on the SOLD benchmark.
 
 ## Description
 
-This project implements an offensive language detection system using various pre-trained language models (including Llama and Mistral variants) with LoRA fine-tuning. It's designed to identify and analyze offensive content in multilingual contexts, specifically targeting Sinhala and English languages.
+This project provides a specialized fine-tuning pipeline for LLMs (including Llama and Mistral variants) using LoRA (Low-Rank Adaptation) to optimize model performance on offensive language detection tasks. It features comprehensive support for Sinhala language, integrating seamlessly with the SOLD (Sinhala Offensive Language Detection) benchmark for evaluation.
 
 ## Features
 
-- Multi-lingual offensive language detection (Sinhala and English)
+- Sinhala offensive language detection 
 - Support for multiple LLM architectures (Llama, Mistral)
 - LoRA-based fine-tuning for efficient training
 - Offensive phrase extraction and analysis
