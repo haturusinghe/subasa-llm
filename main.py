@@ -310,11 +310,11 @@ class OffensiveLanguageDetector:
             trainer_stats = trainer.train()
             self._log_training_stats(trainer_stats)
             
-            save_path, huggingface_repo_url = "", ""
-            if self.args.push_to_hub:
-                save_path, huggingface_repo_url = save_checkpoint(self.args, model, tokenizer)
-            self._update_wandb_config({"checkpoint": save_path, 
-                                     "huggingface_repo_url": huggingface_repo_url})
+            # save_path, huggingface_repo_url = "", ""
+            # if self.args.push_to_hub:
+            #     save_path, huggingface_repo_url = save_checkpoint(self.args, model, tokenizer)
+            # self._update_wandb_config({"checkpoint": save_path, 
+            #                          "huggingface_repo_url": huggingface_repo_url})
 
         except Exception as e:
             self.logger.error(f"Training failed: {str(e)}")
