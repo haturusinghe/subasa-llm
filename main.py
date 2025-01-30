@@ -344,6 +344,7 @@ class OffensiveLanguageDetector:
             
             self.logger.info("Starting evaluation")
             self.test(model, tokenizer)
+            wandb.finish()
 
         except Exception as e:
             self.logger.error(f"Evaluation failed: {str(e)}")
@@ -455,7 +456,7 @@ class OffensiveLanguageDetector:
             self.logger.error(f"Testing failed: {str(e)}")
             raise
         finally:
-            wandb.finish()
+            print("Testing completed")
     
     @staticmethod
     def _extract_components(text, model_type="llama"):
