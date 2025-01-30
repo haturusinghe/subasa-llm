@@ -20,20 +20,30 @@ from src.utils.logging_utils import setup_logging
 from torch.utils.data import Dataset
 class SOLDDataset(Dataset):
     def __init__(self, args, mode='train'):
-        self.train_dataset_path = 'SOLD_DATASET/sold_train_split.json' 
-        self.test_dataset_path = 'SOLD_DATASET/sold_test_split.json'
+        self.sold_train_dataset_path = 'SOLD_DATASET/sold_train_split.json' 
+        self.sold_test_dataset_path = 'SOLD_DATASET/sold_test_split.json'
+
+        self.suhs_test_dataset_path = 'SUHS_DATASET/suhs_test.json'
 
         self.label_list = ['NOT' , 'OFF']
         self.label_count = [0, 0]
         self.logger = setup_logging()
 
+        self.target_dataset = args.dataset
+
         if mode == 'test':
-            with open(self.test_dataset_path, 'r') as f:
+
+            if self.dataset == 'suhs':
+                dataset_path = self.suhs_test_dataset_path
+            else:
+                dataset_path = self.sold_test_dataset_path
+
+            with open(dataset_path, 'r') as f:
                 self.dataset = list(json.load(f))
             # Sort dataset by a unique identifier to ensure consistent ordering
             self.dataset.sort(key=lambda x: x['post_id'])
         elif mode == 'train' or mode == 'val':
-            with open(self.train_dataset_path, 'r') as f:
+            with open(self.sold_train_dataset_path, 'r') as f:
                 self.dataset = list(json.load(f))
             # Sort dataset by a unique identifier to ensure consistent ordering
             self.dataset.sort(key=lambda x: x['post_id'])
@@ -81,7 +91,7 @@ from pathlib import Path
 class SOLDAugmentedDataset(SOLDDataset):
     # Configuration constants
     MAX_NEW_PHRASES_ALLOWED = 3
-    MAX_NEW_SENTENCES_GENERATED = 3
+    MAX_NEW_SENTENCES_GENERATED = 1
     AUGMENTATION_STRATEGIES = [
         "Noun-Based Insertions",
         "Adjective Replacement",
@@ -100,6 +110,7 @@ class SOLDAugmentedDataset(SOLDDataset):
         super().__init__(args, mode)
         self.output_dir = Path("json_dump")
         self.output_dir.mkdir(exist_ok=True)
+        self.max_new_setences_generated = args.max_new_setences_generated
         self.initialize_data_structures()
         self.load_and_process_data()
         self.process_offensive_words()
@@ -117,6 +128,7 @@ class SOLDAugmentedDataset(SOLDDataset):
         self.non_offensive_data_with_pos_tags: List[List[Tuple[str, str]]] = []
         self.pos_tagger = POSTagger()
         self.offensive_single_word_list_with_pos_tags: List[Tuple[str, str]] = []
+        
 
     def load_and_process_data(self):
         """Load and separate offensive and non-offensive data."""
@@ -307,7 +319,7 @@ class SOLDAugmentedDataset(SOLDDataset):
         new_offensive_sentences_rationale = []
         failed_strategies: Set[str] = set()
         
-        while len(new_offensive_sentences_tokens) < self.MAX_NEW_SENTENCES_GENERATED:
+        while len(new_offensive_sentences_tokens) < self.max_new_setences_generated:
             modified_tokens = tokens.copy()
             inserted_positions: Set[int] = set()
             count_inserted = 0
