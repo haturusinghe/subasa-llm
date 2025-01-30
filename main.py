@@ -512,7 +512,7 @@ def parse_args():
     parser.add_argument('--seed', type=int, default=42, help='random seed')
 
     # DATASET
-    dataset_choices = ['sold', 'hatexplain']
+    dataset_choices = ['sold', 'suhs']
     parser.add_argument('--dataset', default='sold', choices=dataset_choices, help='a dataset to use')
 
     # TESTING 
@@ -554,6 +554,7 @@ def parse_args():
     # DATASET AUGMENTATION
     parser.add_argument('--skip_empty_rat', default=False, help='skip empty rationales', type=bool, required=False)
     parser.add_argument('--use_augmented_dataset', default=False, help='use augmented dataset', type=bool)
+    parser.add_argument('--max_gen_per_sample', type=int, default=1, help='maximum number of generations per sample')
 
     #DEBUG
     parser.add_argument('--debug', default=False, help='debug mode', type=bool)
