@@ -33,7 +33,10 @@ class SOLDDataset(Dataset):
 
         if mode == 'test':
 
-            if self.dataset == 'suhs':
+            if self.target_dataset == 'suhs':
+                print("*"*20)
+                print("Using SUHS dataset")
+                print("*"*20)
                 dataset_path = self.suhs_test_dataset_path
             else:
                 dataset_path = self.sold_test_dataset_path
