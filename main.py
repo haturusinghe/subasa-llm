@@ -183,7 +183,7 @@ class OffensiveLanguageDetector:
     def _prepare_dataset(self, tokenizer, mode: str = 'train') -> Dataset:
         """Prepare and process the dataset for training or testing"""
         try:
-            dataset_cls = SOLDAugmentedDataset if self.args.use_augmented_dataset else SOLDDataset
+            dataset_cls = SOLDDataset if mode == 'test' else (SOLDAugmentedDataset if self.args.use_augmented_dataset else SOLDDataset)
             dataset = dataset_cls(self.args, mode)
             dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
             
