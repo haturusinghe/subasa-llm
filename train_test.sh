@@ -6,9 +6,21 @@
 
 # python main.py --push_to_hub True --exp_save_name Llama-3.2-3B-Instruct-base --wandb_project unsloth_Llama-3.2-3B-Instruct-FTandEval --pretrained_model unsloth/Llama-3.2-3B-Instruct --per_device_train_batch_size 4 --test True --hf_model_path unsloth/Llama-3.2-3B-Instruct
 
-# Finetuning
+# Finetuning for Augmented Dataset
+rm -rf s-haturusinghe/
 
-python main.py --push_to_hub True --exp_save_name llama-3.1-8B-Finetuned-v2 --wandb_project unsloth_Llama-3.1-8B-Instruct-FTandEval --pretrained_model unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit --per_device_train_batch_size 4
+# Llama 3.2 3B with Augmented Dataset
+python main.py --push_to_hub True --exp_save_name llama-3.2-3B-Finetuned-v2.1-Augmented --wandb_project unsloth_Llama-3.2-3B-Instruct-FTandEval --pretrained_model unsloth/Llama-3.2-3B-Instruct --per_device_train_batch_size 4 --use_augmented_dataset True --test True
 
+rm -rf s-haturusinghe/
+# Llama 3.1 8B with Augmented Dataset
+python main.py --push_to_hub True --exp_save_name llama-3.1-8B-Finetuned-v2.1-Augmented --wandb_project unsloth_Llama-3.1-8B-Instruct-FTandEval --pretrained_model unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit --per_device_train_batch_size 4 --use_augmented_dataset True --test True
 
-python main.py --push_to_hub True --exp_save_name llama-3.2-3B-Finetuned-v2 --wandb_project unsloth_Llama-3.2-3B-Instruct-FTandEval --pretrained_model unsloth/Llama-3.2-3B-Instruct --per_device_train_batch_size 4
+# For Mistral Models
+rm -rf s-haturusinghe/
+
+python main.py --push_to_hub True --exp_save_name mistra-7Bv0.3-ft-v3.1 --wandb_project mistral-7Bv0.3-Instruct-FTandEvalv2 --pretrained_model unsloth/mistral-7b-instruct-v0.3-bnb-4bit --per_device_train_batch_size 4 --test True
+
+rm -rf s-haturusinghe/
+# Mistral buth with Augmented Dataset
+python main.py --push_to_hub True --exp_save_name mistra-7Bv0.3-ft-v3.1-Augmented --wandb_project mistral-7Bv0.3-Instruct-FTandEvalv2 --pretrained_model unsloth/mistral-7b-instruct-v0.3-bnb-4bit --per_device_train_batch_size 4 --use_augmented_dataset True --test True
