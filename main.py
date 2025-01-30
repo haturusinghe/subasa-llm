@@ -323,6 +323,13 @@ class OffensiveLanguageDetector:
             if self.args.test:
                 self.logger.info("Testing")
                 self.test(model, tokenizer)
+
+                save_path, huggingface_repo_url = "", ""
+                if self.args.push_to_hub:
+                    save_path, huggingface_repo_url = save_checkpoint(self.args, model, tokenizer)
+                self._update_wandb_config({"checkpoint": save_path, 
+                                        "huggingface_repo_url": huggingface_repo_url})
+                wandb.finish()
             else:
                 wandb.finish()
 
