@@ -1,14 +1,11 @@
 import argparse
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
 import gc
 import json
 import os
 import random
 from datetime import datetime
-import logging
-from math import ceil
 
 import numpy as np
 import torch
@@ -234,6 +231,9 @@ class OffensiveLanguageDetector:
 
     def train(self) -> None:
         """Train the model"""
+        print("*"*50)
+        print("Training")
+        print("*"*50)
         try:
             model, tokenizer = self._load_model_and_tokenizer()
             dataset = self._prepare_dataset(tokenizer)
@@ -335,6 +335,9 @@ class OffensiveLanguageDetector:
 
     def evaluate(self) -> None:
         """Evaluate a pre-trained model from HuggingFace"""
+        print("*"*50)
+        print("EVALUATING")
+        print("*"*50)
         try:
             if not self.args.hf_model_path:
                 raise ValueError("HuggingFace model path must be provided for evaluation")
@@ -349,6 +352,10 @@ class OffensiveLanguageDetector:
         except Exception as e:
             self.logger.error(f"Evaluation failed: {str(e)}")
             raise
+    
+    def evaluate_using_ollama(self) -> None:
+        # TODO implement evaluation using OLLAMA, where the gguf file is loaded from args.hf_model_path and the model is loaded from the gguf file using ollama
+        pass
 
     def test(self, model=None, tokenizer=None) -> None:
         """Test the model"""
@@ -518,6 +525,8 @@ def parse_args():
     # TESTING 
     parser.add_argument('--test', default=True, help='test the model', type=bool)
     parser.add_argument('--hf_model_path', type=str, required=False, help='the checkpoint path to test', default=None)
+    parser.add_argument('--test_with_ollama', default=False, help='test the model with OLLAMA', type=bool)
+    parser.add_argument('--ollama_model_path', type=str, required=False, help='the OLLAMA model path to test', default=None)
 
     # PRETRAINED MODEL
     model_choices = [
